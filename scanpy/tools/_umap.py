@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 import numpy as np
 from anndata import AnnData
@@ -28,8 +28,9 @@ def umap(
     a: Optional[float] = None,
     b: Optional[float] = None,
     copy: bool = False,
-    method: Literal['umap', 'rapids'] = 'umap'
-) -> Optional[AnnData]:
+    method: Literal['umap', 'rapids'] = 'umap',
+    return_umap: bool = False
+) -> Optional[Union[AnnData, object, List[Union[AnnData, object]]]]:
     """\
     Embed the neighborhood graph using UMAP [McInnes18]_.
 
@@ -135,7 +136,7 @@ def umap(
     neigh_params = adata.uns['neighbors']['params']
     X = _choose_representation(
         adata, neigh_params.get('use_rep', None), neigh_params.get('n_pcs', None), silent=True)
-    if method == 'umap':
+    if method == 'umap' and not return_umap:
         # the data matrix X is really only used for determining the number of connected components
         # for the init condition in the UMAP embedding
         n_epochs = 0 if maxiter is None else maxiter
@@ -155,6 +156,26 @@ def umap(
             neigh_params.get('metric_kwds', {}),
             verbose=settings.verbosity > 3,
         )
+    elif method == 'umap' and return_umap:
+        from umap import UMAP 
+        n_epochs = 0 if maxiter is None else maxiter
+        n_neighbors = adata.uns['neighbors']['params']['n_neighbors']
+        umap = UMAP(
+            n_neighbors=n_neighbors,
+            n_components=n_components,
+            n_epochs=maxiter,
+            learning_rate=alpha,
+            init=init_coords,
+            min_dist=min_dist,
+            spread=spread,
+            negative_sample_rate=negative_sample_rate,
+            a=a,
+            b=b,
+            verbose=settings.verbosity > 3,
+            metric=neigh_params.get('metric', 'euclidean'),
+            metric_kwds=neigh_params.get('metric_kwds', {}),
+        )
+        X_umap = umap.fit_transform(X)
     elif method == 'rapids':
         metric = neigh_params.get('metric', 'euclidean')
         if metric != 'euclidean':
@@ -189,4 +210,7 @@ def umap(
             "    'X_umap', UMAP coordinates (adata.obsm)"
         ),
     )
-    return adata if copy else None
+    return_val = adata if copy else None
+    if return_umap:
+        return_val = [return_val, umap] if return_val else umap 
+    return return_val

@@ -536,7 +536,10 @@ def pca(
             '    \'pca_variance\', the variance / eigenvalues (adata.uns)\n'
             '    \'pca_variance_ratio\', the variance ratio (adata.uns)'
         )
-        return adata if copy else None
+        return_val = adata if copy else None
+        if return_info:
+            return_val = [return_val, pca_] if return_val else pca_
+        return return_val
     else:
         logg.info('    finished', time=start)
         if return_info:
